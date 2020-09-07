@@ -242,7 +242,6 @@ esp_err_t httpd_resp_send(httpd_req_t *r, const char *buf, ssize_t buf_len)
     }
 
     struct httpd_req_aux *ra = r->aux;
-    const char *httpd_hdr_str = "HTTP/1.1 %s\r\nContent-Type: %s\r\nContent-Length: %d\r\n";
     const char *colon_separator = ": ";
     const char *cr_lf_seperator = "\r\n";
 
@@ -251,10 +250,21 @@ esp_err_t httpd_resp_send(httpd_req_t *r, const char *buf, ssize_t buf_len)
     /* Request headers are no longer available */
     ra->req_hdrs_count = 0;
 
-    /* Size of essential headers is limited by scratch buffer size */
-    if (snprintf(ra->scratch, sizeof(ra->scratch), httpd_hdr_str,
+    if(r->uri_location) {
+        const char *httpd_hdr_str = "HTTP/1.1 %s\r\nContent-Type: %s\r\nContent-Length: %d\r\nLocation: %s\r\n";
+        /* Size of essential headers is limited by scratch buffer size */
+        if (snprintf(ra->scratch, sizeof(ra->scratch), httpd_hdr_str,
+                 ra->status, ra->content_type, buf_len, r->uri_location) >= sizeof(ra->scratch)) {
+            return ESP_ERR_HTTPD_RESP_HDR;
+        }
+    }
+    else {
+        const char *httpd_hdr_str = "HTTP/1.1 %s\r\nContent-Type: %s\r\nContent-Length: %d\r\n";
+        /* Size of essential headers is limited by scratch buffer size */
+        if (snprintf(ra->scratch, sizeof(ra->scratch), httpd_hdr_str,
                  ra->status, ra->content_type, buf_len) >= sizeof(ra->scratch)) {
-        return ESP_ERR_HTTPD_RESP_HDR;
+            return ESP_ERR_HTTPD_RESP_HDR;
+        }
     }
 
     /* Sending essential headers */
@@ -436,6 +446,10 @@ esp_err_t httpd_resp_send_err(httpd_req_t *req, httpd_err_resp_t error)
          * it responds with a standard HTTP/1.1 response */
         status = "200 OK";
         msg    = "Upgrade not supported by server";
+        break;
+    case HTTPD_302_NOT_FOUND_REDIRECT:
+        status = "302 Found";
+        msg    = "URL temorary redirected";
         break;
     case HTTPD_500_SERVER_ERROR:
     default:

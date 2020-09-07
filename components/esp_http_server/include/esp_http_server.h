@@ -49,6 +49,7 @@ initializer that should be kept in sync
         .global_transport_ctx_free_fn = NULL,           \
         .open_fn = NULL,                                \
         .close_fn = NULL,                               \
+        .redirection_uri = NULL,                        \
 }
 
 #define ESP_ERR_HTTPD_BASE              (0x8000)                    /*!< Starting number of HTTPD error codes */
@@ -195,6 +196,8 @@ typedef struct httpd_config {
      * was closed by the network stack - that is, the file descriptor may not be valid anymore.
      */
     httpd_close_func_t close_fn;
+
+    char *redirection_uri;
 } httpd_config_t;
 
 /**
@@ -324,6 +327,8 @@ typedef struct httpd_req {
      * function for freeing the session context, please specify that here.
      */
     httpd_free_ctx_fn_t free_ctx;
+
+    char *uri_location;
 } httpd_req_t;
 
 /**

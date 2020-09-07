@@ -109,7 +109,10 @@ typedef enum {
      * upgrade. For this respond with 200 OK. Client expects status
      * code 101 if upgrade were supported, so 200 should be fine.
      */
-    HTTPD_XXX_UPGRADE_NOT_SUPPORTED
+    HTTPD_XXX_UPGRADE_NOT_SUPPORTED,
+
+    /* When redirection is enabled this is used instead 404 */
+    HTTPD_302_NOT_FOUND_REDIRECT,
 } httpd_err_resp_t;
 
 /**
