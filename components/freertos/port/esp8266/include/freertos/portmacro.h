@@ -111,6 +111,7 @@ extern void vTaskSwitchContext( void );				\
 	}												\
 }
 
+void portYIELD_FROM_ISR(void);
 
 /*-----------------------------------------------------------*/
 extern unsigned cpu_sr;
@@ -212,7 +213,7 @@ void esp_increase_tick_cnt(const TickType_t ticks);
 extern void esp_vApplicationIdleHook( void );
 extern void esp_vApplicationTickHook( void );
 
-extern const uint32_t g_esp_ticks_per_us;
+extern uint32_t g_esp_ticks_per_us;
 
 /*
  * @brief Get FreeRTOS system idle ticks

@@ -9,9 +9,10 @@
  */
 
 
-#include "wpa/includes.h"
-#include "wpa/common.h"
-#include "crypto/crypto.h"
+#include "utils/includes.h"
+
+#include "utils/common.h"
+#include "crypto.h"
 //#include "des_i.h"
 
 /*

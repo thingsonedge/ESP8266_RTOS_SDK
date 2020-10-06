@@ -15,6 +15,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stdbool.h>
 #include "esp_err.h"
 #include "driver/gpio.h"
 
@@ -46,7 +47,7 @@ typedef enum {
 } esp_sleep_source_t;
 
 /**
-  * @brief     Set the chip to deep-sleep mode.
+  * @brief     Enter deep-sleep mode.
   *
   *            The device will automatically wake up after the deep-sleep time set
   *            by the users. Upon waking up, the device boots up from user_init.
@@ -56,13 +57,25 @@ typedef enum {
   * @attention 2. system_deep_sleep(0): there is no wake up timer; in order to wake
   *               up, connect a GPIO to pin RST, the chip will wake up by a falling-edge
   *               on pin RST
+  * @attention 3. esp_deep_sleep does not shut down WiFi and higher level protocol
+  *               connections gracefully. Make sure esp_wifi_stop are called to close any
+  *               connections and deinitialize the peripherals.
   *
   * @param     time_in_us  deep-sleep time, unit: microsecond
   *
   * @return    null
   */
-void esp_deep_sleep(uint32_t time_in_us);
+void esp_deep_sleep(uint64_t time_in_us);
 
+/**
+ * @brief Set implementation-specific power management configuration
+ * @param config pointer to implementation-specific configuration structure (e.g. esp_pm_config_esp32)
+ * @return
+ *      - ESP_OK on success
+ *      - ESP_ERR_INVALID_ARG if the configuration values are not correct
+ *      - ESP_ERR_NOT_SUPPORTED if certain combination of values is not supported.
+ */
+esp_err_t esp_pm_configure(const void* config);
 
 /**
   * @brief  Call this API before esp_deep_sleep and esp_wifi_init to set the activity after the
@@ -207,9 +220,12 @@ esp_err_t esp_sleep_enable_timer_wakeup(uint32_t time_in_us);
 /**
  * @brief Enter light sleep with the configured wakeup options
  *
+ * @attention esp_deep_sleep does not shut down WiFi and higher level protocol
+ *               connections gracefully. Make sure esp_wifi_stop are called to close any
+ *               connections and deinitialize the peripherals.
  * @return
  *  - ESP_OK on success (returned after wakeup)
- *  - ESP_ERR_INVALID_STATE if WiFi or BT is not stopped
+ *  - ESP_ERR_INVALID_STATE if WiFi is not stopped
  */
 esp_err_t esp_light_sleep_start(void);
 
@@ -245,6 +261,22 @@ esp_err_t esp_sleep_enable_gpio_wakeup(void);
  *      - ESP_ERR_INVALID_STATE if trigger was not active
  */
 esp_err_t esp_sleep_disable_wakeup_source(esp_sleep_source_t source);
+
+/**
+ * @brief Print power consumption information
+ *
+ * @note This function is used to print power consumption data. The current
+ *       when the RF and CPU are both turned on is 70 mA. The current when
+ *       only the CPU is turned on is 18 mA. 900uA when both CPU and RF are off.
+ *       There may be some errors compared to the actual power consumption.
+ *       The power consumption is based on the actual measurement, and the printing
+ *       in the function is for reference only.
+ * 
+ * @param     clear_old_data  - Recalculate power consumption info or not.
+ * 
+ * @return    null
+ */
+void esp_power_consumption_info(bool clear_old_data);
 
 #ifdef __cplusplus
 }

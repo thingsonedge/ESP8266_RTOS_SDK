@@ -2,7 +2,7 @@ if(BOOTLOADER_BUILD)
     # For bootloader, all we need from esp8266 is headers
     set(COMPONENT_ADD_INCLUDEDIRS include)
     # set(COMPONENT_REQUIRES ${COMPONENTS})
-    set(COMPONENT_SRCS source/ets_printf.c)
+    set(COMPONENT_SRCS source/ets_printf.c source/crc.c source/esp_fast_boot.c)
     register_component(esp8266)
 
     # as cmake won't attach linker args to a header-only library, attach
@@ -25,13 +25,11 @@ else()
         "source/chip_boot.c"
         "source/backtrace.c"
         "source/esp_sleep.c"
-        "source/esp_err_to_name.c"
         "source/esp_timer.c"
         "source/esp_wifi_os_adapter.c"
         "source/esp_wifi.c"
         "source/ets_printf.c"
-        "source/event_default_handlers.c"
-        "source/event_loop.c"
+        "source/crc.c"
         "source/phy_init.c"
         "source/reset_reason.c"
         "source/startup.c"
@@ -39,6 +37,7 @@ else()
         "source/task_wdt.c"
         "source/rom.c"
         "source/hw_random.c"
+        "source/esp_fast_boot.c"
         "driver/adc.c"
         "driver/gpio.c"
         "driver/hw_timer.c"
@@ -54,7 +53,8 @@ else()
 
     set(include_dirs "include" "include/driver")
 
-    set(priv_requires "wpa_supplicant" "log" "spi_flash" "tcpip_adapter" "esp_ringbuf" "bootloader_support" "nvs_flash" "util")
+    set(requires "esp_common" "esp_event")
+    set(priv_requires "wpa_supplicant" "log" "spi_flash" "tcpip_adapter" "esp_ringbuf" "bootloader_support" "nvs_flash" "app_update")
     set(fragments linker.lf ld/esp8266_fragments.lf ld/esp8266_bss_fragments.lf)
 
     idf_component_register(SRCS "${srcs}"
@@ -65,9 +65,9 @@ else()
                     REQUIRED_IDF_TARGETS esp8266)
 
     target_link_libraries(${COMPONENT_LIB} PUBLIC "-L ${CMAKE_CURRENT_SOURCE_DIR}/lib" "-lstdc++")
-
+    target_compile_definitions(${COMPONENT_LIB} PUBLIC -DUSING_IBUS_FASTER_GET)
     if(NOT CONFIG_NO_BLOBS)
-        set(blobs "gcc" "hal" "core" "net80211" "phy" "rtc" "clk" "pp" "smartconfig" "ssc" "wpa" "espnow" "wps" "wpa2")
+        set(blobs "gcc" "hal" "core" "net80211" "phy" "rtc" "clk" "pp" "smartconfig" "ssc" "espnow")
         foreach(blob ${blobs})
             add_library(${blob} STATIC IMPORTED)
             set_property(TARGET ${blob} PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/lib/lib${blob}.a)

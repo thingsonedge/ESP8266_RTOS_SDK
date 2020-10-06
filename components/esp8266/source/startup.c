@@ -27,27 +27,21 @@
 #include "esp_phy_init.h"
 #include "esp_heap_caps_init.h"
 #include "esp_task_wdt.h"
-#include "internal/esp_wifi_internal.h"
-#include "internal/esp_system_internal.h"
+#include "esp_private/wifi.h"
+#include "esp_private/esp_system_internal.h"
 #include "esp8266/eagle_soc.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
+#include "esp_task.h"
 
 #ifndef CONFIG_NEWLIB_LIBRARY_CUSTOMER
 #include "esp_newlib.h"
 #endif
 
-extern void chip_boot(void);
-extern int rtc_init(void);
-extern int mac_init(void);
-extern int base_gpio_init(void);
-extern int watchdog_init(void);
-extern int wifi_timer_init(void);
-extern int wifi_nvs_init(void);
 extern esp_err_t esp_pthread_init(void);
-extern void phy_get_bb_evm(void);
-extern void uart_div_modify(uint8_t uart_no, uint16_t DivLatchValue);
+extern void chip_boot(void);
+extern int base_gpio_init(void);
 
 static inline int should_load(uint32_t load_addr)
 {
@@ -70,35 +64,33 @@ static void user_init_entry(void *param)
     extern void (*__init_array_end)(void);
 
     extern void app_main(void);
+    extern uint32_t esp_get_time(void);
 
     /* initialize C++ construture function */
     for (func = &__init_array_start; func < &__init_array_end; func++)
         func[0]();
 
-    phy_get_bb_evm();
-
-    /*enable tsf0 interrupt for pwm*/
-    REG_WRITE(PERIPHS_DPORT_BASEADDR, (REG_READ(PERIPHS_DPORT_BASEADDR) & ~0x1F) | 0x1);
-    REG_WRITE(INT_ENA_WDEV, REG_READ(INT_ENA_WDEV) | WDEV_TSF0_REACH_INT);
-
-    assert(nvs_flash_init() == 0);
-    assert(rtc_init() == 0);
-    assert(mac_init() == 0);
+    esp_phy_init_clk();
     assert(base_gpio_init() == 0);
-    esp_phy_load_cal_and_init(0);
 
-    esp_wifi_set_rx_pbuf_mem_type(WIFI_RX_PBUF_DRAM);
+    if (esp_reset_reason_early() != ESP_RST_FAST_SW) {
+        assert(esp_mac_init() == ESP_OK);
+    }
 
 #if CONFIG_RESET_REASON
     esp_reset_reason_init();
 #endif
 
-#ifdef CONFIG_TASK_WDT
+#ifdef CONFIG_ESP_TASK_WDT
     esp_task_wdt_init();
 #endif
 
 #ifdef CONFIG_ENABLE_PTHREAD
     assert(esp_pthread_init() == 0);
+#endif
+
+#ifdef CONFIG_BOOTLOADER_FAST_BOOT
+    REG_CLR_BIT(DPORT_CTL_REG, DPORT_CTL_DOUBLE_CLK);
 #endif
 
 #ifdef CONFIG_ESP8266_DEFAULT_CPU_FREQ_160
@@ -117,6 +109,10 @@ void call_start_cpu(size_t start_addr)
 
     extern int _bss_start, _bss_end;
     extern int _iram_bss_start, _iram_bss_end;
+
+#ifdef CONFIG_BOOTLOADER_FAST_BOOT
+    REG_SET_BIT(DPORT_CTL_REG, DPORT_CTL_DOUBLE_CLK);
+#endif
 
     esp_image_header_t *head = (esp_image_header_t *)(FLASH_BASE + (start_addr & (FLASH_SIZE - 1)));
     esp_image_segment_header_t *segment = (esp_image_segment_header_t *)((uintptr_t)head + sizeof(esp_image_header_t));
@@ -175,7 +171,7 @@ void call_start_cpu(size_t start_addr)
     esp_newlib_init();
 #endif
 
-    assert(xTaskCreate(user_init_entry, "uiT", CONFIG_MAIN_TASK_STACK_SIZE, NULL, configMAX_PRIORITIES, NULL) == pdPASS);
+    assert(xTaskCreate(user_init_entry, "uiT", ESP_TASK_MAIN_STACK, NULL, ESP_TASK_MAIN_PRIO, NULL) == pdPASS);
 
     vTaskStartScheduler();
 }

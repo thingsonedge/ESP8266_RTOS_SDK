@@ -1458,6 +1458,7 @@ constant. */
 	used to set and query a pointer respectively. */
 	void vTaskSetThreadLocalStoragePointer( TaskHandle_t xTaskToSet, BaseType_t xIndex, void *pvValue ) PRIVILEGED_FUNCTION;
 	void *pvTaskGetThreadLocalStoragePointer( TaskHandle_t xTaskToQuery, BaseType_t xIndex ) PRIVILEGED_FUNCTION;
+	void **pvTaskGetThreadLocalStorageBufferPointer( TaskHandle_t xTaskToQuery, BaseType_t xIndex ) PRIVILEGED_FUNCTION;
 
 	#if ( configTHREAD_LOCAL_STORAGE_DELETE_CALLBACKS )
 		/**
@@ -2381,6 +2382,16 @@ typedef struct xTASK_SNAPSHOT
  * @return Number of elements stored in array.
  */
 UBaseType_t uxTaskGetSnapshotAll( TaskSnapshot_t * const pxTaskSnapshotArray, const UBaseType_t uxArraySize, UBaseType_t * const pxTcbSz );
+
+/**
+ * @brief Modify task stack size dynamically.
+ *
+ * @param xTask task handle which created by xTaskCreate.
+ * @param newStackDepth task' new stack size.
+ *
+ * @return pdPASS if success or others if failed
+ */
+BaseType_t vTaskModifyStackDepth(TaskHandle_t xTask, const configSTACK_DEPTH_TYPE newStackDepth);
 
 #ifdef __cplusplus
 }

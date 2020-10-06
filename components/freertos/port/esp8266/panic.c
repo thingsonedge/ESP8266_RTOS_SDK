@@ -13,12 +13,12 @@
 // limitations under the License.
 
 #include "stdlib.h"
-
+#include <string.h>
 #include "esp_attr.h"
 #include "esp_libc.h"
 #include "esp_system.h"
 #include "esp_task_wdt.h"
-#include "internal/esp_system_internal.h"
+#include "esp_private/esp_system_internal.h"
 
 #include "esp8266/rom_functions.h"
 #include "esp8266/backtrace.h"
@@ -27,6 +27,7 @@
 #include "esp_err.h"
 
 #include "FreeRTOS.h"
+#include "task.h"
 #include "freertos/xtensa_context.h"
 
 #define PANIC(_fmt, ...)    ets_printf(_fmt, ##__VA_ARGS__)
@@ -77,17 +78,31 @@ static inline void panic_frame(XtExcFrame *frame)
     void *o_pc;
     void *o_sp;
 
-    const char *reason = frame->exccause < 30 ? edesc[frame->exccause] : "unknown";
-    const uint32_t *regs = (const uint32_t *)frame;
+#ifdef CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK
+    if (frame->exccause == 1) {
+        uint32_t reason = soc_debug_reason();
 
-    PANIC("Guru Meditation Error: Core  0 panic'ed (%s). Exception was unhandled.\r\n", reason);
-    PANIC("Core 0 register dump:\n");
+        if (reason & XCHAL_DEBUGCAUSE_DBREAK_MASK) {
+            char name[configMAX_TASK_NAME_LEN];
 
-    for (int i = 0; i < 20; i += 4) {
-        for (int j = 0; j < 4; j++) {
-            PANIC("%-8s: 0x%08x  ", sdesc[i + j], regs[i + j + 1]);
+            strncpy(name, pcTaskGetTaskName(NULL), configMAX_TASK_NAME_LEN);
+            ets_printf("Stack canary watchpoint triggered (%s)\n", name);
         }
-        PANIC("\r\n");
+    } else
+#endif
+    {
+        const char *reason = frame->exccause < 30 ? edesc[frame->exccause] : "unknown";
+        const uint32_t *regs = (const uint32_t *)frame;
+
+        PANIC("Guru Meditation Error: Core  0 panic'ed (%s). Exception was unhandled.\r\n", reason);
+        PANIC("Core 0 register dump:\n");
+
+        for (int i = 0; i < 20; i += 4) {
+            for (int j = 0; j < 4; j++) {
+                PANIC("%-8s: 0x%08x  ", sdesc[i + j], regs[i + j + 1]);
+            }
+            PANIC("\r\n");
+        }
     }
 
     PANIC("\r\nBacktrace: %p:%p ", i_pc, i_sp);
@@ -101,17 +116,35 @@ static inline void panic_frame(XtExcFrame *frame)
 #endif /* ESP_PANIC_PRINT */
 
 #ifdef ESP_PANIC_REBOOT
+static void hardware_restart(void)
+{
+    CLEAR_WDT_REG_MASK(WDT_CTL_ADDRESS, BIT0);
+    WDT_REG_WRITE(WDT_OP_ADDRESS, 1);
+    WDT_REG_WRITE(WDT_OP_ND_ADDRESS, 1);
+    SET_PERI_REG_BITS(PERIPHS_WDT_BASEADDR + WDT_CTL_ADDRESS,
+                      WDT_CTL_RSTLEN_MASK,
+                      7 << WDT_CTL_RSTLEN_LSB,
+                      0);
+    SET_PERI_REG_BITS(PERIPHS_WDT_BASEADDR + WDT_CTL_ADDRESS,
+                      WDT_CTL_RSPMOD_MASK,
+                      0 << WDT_CTL_RSPMOD_LSB,
+                      0);
+    SET_PERI_REG_BITS(PERIPHS_WDT_BASEADDR + WDT_CTL_ADDRESS,
+                      WDT_CTL_EN_MASK,
+                      1 << WDT_CTL_EN_LSB,
+                      0);
+}
+
 static void esp_panic_reset(void)
 {
     uart_tx_wait_idle(0);
-    uart_tx_wait_idle(1);    
-
-    rom_i2c_writeReg(0x67, 4, 1, 0x08);
-    rom_i2c_writeReg(0x67, 4, 2, 0x81);
+    uart_tx_wait_idle(1);
 
     esp_reset_reason_set_hint(ESP_RST_PANIC);
 
-    rom_software_reboot();
+    hardware_restart();
+
+    while (1);
 }
 #endif
 

@@ -24,17 +24,23 @@
 #include "esp8266/uart_register.h"
 #include "esp8266/rom_functions.h"
 
-#ifndef CONFIG_CONSOLE_UART_NONE
+#ifdef CONFIG_ETS_PRINTF_EXIT_WHEN_FLASH_RW
+#define ETS_PRINTF_ATTR IRAM_ATTR
+#else
+#define ETS_PRINTF_ATTR
+#endif
+
+#ifndef CONFIG_ESP_CONSOLE_UART_NONE
 static void uart_putc(int c)
 {
     while (1) {
-        uint32_t fifo_cnt = READ_PERI_REG(UART_STATUS(CONFIG_CONSOLE_UART_NUM)) & (UART_TXFIFO_CNT << UART_TXFIFO_CNT_S);
+        uint32_t fifo_cnt = READ_PERI_REG(UART_STATUS(CONFIG_ESP_CONSOLE_UART_NUM)) & (UART_TXFIFO_CNT << UART_TXFIFO_CNT_S);
 
         if ((fifo_cnt >> UART_TXFIFO_CNT_S & UART_TXFIFO_CNT) < 126)
             break;
     }
 
-    WRITE_PERI_REG(UART_FIFO(CONFIG_CONSOLE_UART_NUM) , c);
+    WRITE_PERI_REG(UART_FIFO(CONFIG_ESP_CONSOLE_UART_NUM) , c);
 }
 #else
 #define uart_putc(_c) { }
@@ -285,10 +291,18 @@ int ets_vprintf(const char *fmt, va_list ap)
  *                            "%s": 172 Bytes
  *      "%p", "%d, "%i, "%u", "%x": 215 Bytes
  */
-int ets_printf(const char *fmt, ...)
+int ETS_PRINTF_ATTR ets_printf(const char *fmt, ...)
 {
     va_list ap;
     int ret;
+
+#ifdef CONFIG_ETS_PRINTF_EXIT_WHEN_FLASH_RW
+    extern uint8_t FlashIsOnGoing;
+
+    if (FlashIsOnGoing) {
+        return -1;
+    }
+#endif
 
     va_start(ap, fmt);
     ret = ets_vprintf(fmt, ap);

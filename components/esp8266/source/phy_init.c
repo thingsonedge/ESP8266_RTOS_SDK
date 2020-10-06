@@ -28,7 +28,7 @@
 #include "nvs_flash.h"
 #include "sdkconfig.h"
 
-#include "internal/phy_init_data.h"
+#include "esp_private/phy_init_data.h"
 #include "phy.h"
 
 #include "driver/rtc.h"
@@ -72,11 +72,6 @@ esp_err_t esp_phy_rf_init(const esp_phy_init_data_t* init_data, esp_phy_calibrat
     esp_err_t status = ESP_OK;
     uint8_t sta_mac[6];
     uint8_t *local_init_data = calloc(1, 256);
-#ifdef CONFIG_CONSOLE_UART_BAUDRATE
-    const uint32_t uart_baudrate = CONFIG_CONSOLE_UART_BAUDRATE;
-#else
-    const uint32_t uart_baudrate = 74880; // ROM default baudrate
-#endif
 
     memcpy(local_init_data, init_data->params, 128);
     memcpy(local_init_data + 128, calibration_data->rf_cal_data, 128);
@@ -102,12 +97,7 @@ esp_err_t esp_phy_rf_init(const esp_phy_init_data_t* init_data, esp_phy_calibrat
      * so UARTs must be flush here, then reconfigurate the UART frequency dividor
      */
     uart_tx_wait_idle(0);
-    uart_div_modify(0, UART_CLK_FREQ / uart_baudrate);
-
     uart_tx_wait_idle(1);
-    uart_div_modify(1, UART_CLK_FREQ / uart_baudrate);
-
-    rtc_init_clk(local_init_data);
 
     int ret = register_chipv6_phy(local_init_data);
     if (ret) {
@@ -393,4 +383,34 @@ void esp_wifi_set_max_tx_power_via_vdd33(uint16_t vdd33)
 int phy_printf(const char *fmt, ...)
 {
     return 0;
+}
+
+void esp_phy_init_clk(void)
+{
+    uint8_t buf[128];
+    const esp_phy_init_data_t *init_data;
+#ifdef CONFIG_CONSOLE_UART_BAUDRATE
+    const uint32_t uart_baudrate = CONFIG_CONSOLE_UART_BAUDRATE;
+#else
+    const uint32_t uart_baudrate = 74880; // ROM default baudrate
+#endif
+    extern int rtc_init(void);
+
+    init_data = esp_phy_get_init_data();
+    if (init_data == NULL) {
+        ESP_LOGE(TAG, "failed to obtain PHY init data");
+        abort();
+    }
+    memcpy(buf, init_data->params, 128);
+
+    uart_tx_wait_idle(0);
+    uart_div_modify(0, UART_CLK_FREQ / uart_baudrate);
+
+    uart_tx_wait_idle(1);
+    uart_div_modify(1, UART_CLK_FREQ / uart_baudrate);
+
+    rtc_init();
+    rtc_init_clk(buf);
+
+    esp_phy_release_init_data(init_data);
 }

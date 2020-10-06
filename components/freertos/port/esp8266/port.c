@@ -29,6 +29,7 @@
 /* Scheduler includes. */
 
 #include <stdint.h>
+#include <string.h>
 
 #include <xtensa/config/core.h>
 #include <xtensa/tie/xt_interrupt.h>
@@ -53,7 +54,6 @@
 #define PORT_ASSERT(x)      do { if (!(x)) {ets_printf("%s %u\n", "rtos_port", __LINE__); while(1){}; }} while (0)
 
 extern uint8_t NMIIrqIsOn;
-static int SWReq = 0;
 
 uint32_t cpu_sr;
 
@@ -68,9 +68,15 @@ uint64_t g_esp_os_ticks;
 uint64_t g_esp_os_us;
 uint64_t g_esp_os_cpu_clk;
 
+static uint32_t s_switch_ctx_flag;
+
 void vPortEnterCritical(void);
 void vPortExitCritical(void);
 
+void IRAM_ATTR portYIELD_FROM_ISR(void)
+{
+    s_switch_ctx_flag = 1;
+}
 
 uint8_t *__cpu_init_stk(uint8_t *stack_top, void (*_entry)(void *), void *param, void (*_exit)(void))
 {
@@ -112,7 +118,7 @@ void IRAM_ATTR PendSV(int req)
 {
     if (req == 1) {
         vPortEnterCritical();
-        SWReq = 1;
+        s_switch_ctx_flag = 1;
         xthal_set_intset(1 << ETS_SOFT_INUM);
         vPortExitCritical();
     } else if (req == 2) {
@@ -120,13 +126,12 @@ void IRAM_ATTR PendSV(int req)
     }
 }
 
-void TASK_SW_ATTR SoftIsrHdl(void* arg)
+void IRAM_ATTR SoftIsrHdl(void* arg)
 {
     extern int MacIsrSigPostDefHdl(void);
 
-    if (MacIsrSigPostDefHdl() || (SWReq == 1)) {
-        vTaskSwitchContext();
-        SWReq = 0;
+    if (MacIsrSigPostDefHdl()) {
+        portYIELD_FROM_ISR();
     }
 }
 
@@ -165,7 +170,7 @@ void IRAM_ATTR xPortSysTickHandle(void *p)
     g_esp_os_ticks++;
 
     if (xTaskIncrementTick() != pdFALSE) {
-        vTaskSwitchContext();
+        portYIELD_FROM_ISR();
     }
 }
 
@@ -214,6 +219,15 @@ portBASE_TYPE xPortStartScheduler(void)
     return pdTRUE;
 }
 
+void vPortInitContextFromOldStack(StackType_t *newStackTop, StackType_t *oldStackTop, UBaseType_t stackSize)
+{
+    uintptr_t *sp;
+
+    memcpy(newStackTop, oldStackTop, stackSize);
+    sp = (uintptr_t *)newStackTop;
+    sp[XT_STK_A1 / sizeof(uintptr_t)] = (uintptr_t)sp + XT_STK_FRMSZ;
+}
+
 void vPortEndScheduler(void)
 {
     /* It is unlikely that the CM3 port will require this function as there
@@ -259,7 +273,7 @@ void IRAM_ATTR vPortExitCritical(void)
 void show_critical_info(void)
 {
     ets_printf("ShowCritical:%u\n", uxCriticalNesting);
-    ets_printf("SWReq:%u\n", SWReq);
+    ets_printf("s_switch_ctx_flag:%u\n", s_switch_ctx_flag);
 }
 
 #ifdef ESP_DPORT_CLOSE_NMI
@@ -281,24 +295,36 @@ void esp_dport_close_nmi(void)
 void IRAM_ATTR vPortETSIntrLock(void)
 {
     if (NMIIrqIsOn == 0) {
+        uint32_t regval = REG_READ(NMI_INT_ENABLE_REG);
+
+        REG_WRITE(NMI_INT_ENABLE_REG, 0);
+
         vPortEnterCritical();
         if (!ESP_NMI_IS_CLOSED()) {
             do {
                 REG_WRITE(INT_ENA_WDEV, WDEV_TSF0_REACH_INT);
             } while(REG_READ(INT_ENA_WDEV) != WDEV_TSF0_REACH_INT);
         }
+
+        REG_WRITE(NMI_INT_ENABLE_REG, regval);
     }
 }
 
 void IRAM_ATTR vPortETSIntrUnlock(void)
 {
     if (NMIIrqIsOn == 0) {
+        uint32_t regval = REG_READ(NMI_INT_ENABLE_REG);
+
+        REG_WRITE(NMI_INT_ENABLE_REG, 0);
+
         if (!ESP_NMI_IS_CLOSED()) {
             extern uint32_t WDEV_INTEREST_EVENT;
 
             REG_WRITE(INT_ENA_WDEV, WDEV_INTEREST_EVENT);
         }
         vPortExitCritical();
+
+        REG_WRITE(NMI_INT_ENABLE_REG, regval);
     }
 }
 
@@ -345,6 +371,11 @@ void IRAM_ATTR _xt_isr_handler(void)
             mask &= ~bit;
         }
     } while (soc_get_int_mask());
+
+    if (s_switch_ctx_flag) {
+        vTaskSwitchContext();
+        s_switch_ctx_flag = 0;
+    }
 }
 
 int xPortInIsrContext(void)

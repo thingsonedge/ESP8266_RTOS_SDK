@@ -63,6 +63,7 @@ export EXAMPLE_MQTT_BROKER_CERTIFICATE="https://www.espressif.com/"
 export EXAMPLE_MQTT_BROKER_WS="https://www.espressif.com/"
 export EXAMPLE_MQTT_BROKER_WSS="https://www.espressif.com/"
 export EXAMPLE_MQTT_BROKER_SSL="https://www.espressif.com/"
+export EXAMPLE_MQTT_BROKER_TCP="https://www.espressif.com/"
 
 shopt -s lastpipe # Workaround for Bash to use variables in loops (http://mywiki.wooledge.org/BashFAQ/024)
 
@@ -73,7 +74,7 @@ LOG_SUSPECTED=${LOG_PATH}/common_log.txt
 touch ${LOG_SUSPECTED}
 SDKCONFIG_DEFAULTS_CI=sdkconfig.ci
 
-EXAMPLE_PATHS=$( find ${IDF_PATH}/examples/ -type f -name CMakeLists.txt | grep -v "/components/" | grep -v "/common_components/" | grep -v "/main/" | grep -v "/build_system/cmake/" | sort )
+EXAMPLE_PATHS=$( find ${IDF_PATH}/examples/ -type f -name CMakeLists.txt | grep -v "/components/" | grep -v "/common_components/" | grep -v "/main/" | grep -v "/build_system/cmake/" | grep -v "/mb_example_common/" | sort )
 if [ $# -eq 0 ]
 then
     START_NUM=0

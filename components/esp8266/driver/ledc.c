@@ -51,7 +51,7 @@ typedef struct {
     uint32_t step_01duty; // 0.1 of the duty value
     uint32_t step_001duty; // 0.01 of the duty value
     uint32_t gpio_num;//gpio pins
-    int16_t phase; //init phase
+    float phase; //init phase
     int fade_time; // Time to duty by fade  
 } ledc_obj_t;
 
@@ -203,7 +203,6 @@ esp_err_t ledc_fade_up(ledc_channel_t channel, uint8_t* flag)
             p_ledc_obj[channel]->duty_p += duty_value;
         }
         pwm_set_duty(channel, p_ledc_obj[channel]->duty_p);
-        pwm_start();
         i[channel]++;
         if (i[channel] == 100) {
             i[channel] = 0;
@@ -235,7 +234,6 @@ esp_err_t ledc_fade_down(ledc_channel_t channel, uint8_t* flag)
             p_ledc_obj[channel]->duty_p -= duty_value;
         }
         pwm_set_duty(channel, p_ledc_obj[channel]->duty_p);
-        pwm_start();
         i[channel]++;
         if (i[channel] == 100) {
             i[channel] = 0;
@@ -270,6 +268,7 @@ static void ledc_task(void* pvParameters)
                 }
             }
         }
+        pwm_start();
         xTaskResumeAll();
         vTaskDelay(LEDC_STEP_TIME / portTICK_PERIOD_MS);
     }
@@ -278,7 +277,7 @@ static void ledc_task(void* pvParameters)
 
 esp_err_t ledc_fade_func_install(int intr_alloc_flags)
 {
-    int16_t ledc_phase[LEDC_CHANNEL_MAX] = {0};
+    float ledc_phase[LEDC_CHANNEL_MAX] = {0};
     uint32_t ledc_duty[LEDC_CHANNEL_MAX] = {0};
     uint32_t ledc_gpio_num[LEDC_CHANNEL_MAX] = {0};
     

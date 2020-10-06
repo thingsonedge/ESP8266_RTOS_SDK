@@ -131,6 +131,7 @@
 //}}
 
 //Interrupt remap control registers define{{
+#define NMI_INT_ENABLE_REG          (PERIPHS_DPORT_BASEADDR)
 #define EDGE_INT_ENABLE_REG         (PERIPHS_DPORT_BASEADDR + 0x04)
 #define WDT_EDGE_INT_ENABLE()       SET_PERI_REG_MASK(EDGE_INT_ENABLE_REG, BIT0)
 #define TM1_EDGE_INT_ENABLE()       SET_PERI_REG_MASK(EDGE_INT_ENABLE_REG, BIT1)
@@ -144,6 +145,17 @@
 #define WDEV_TSF0_REACH_INT         (BIT(27))
 
 #define WDEV_COUNT_REG              (0x3ff20c00)
+
+#define WDEVTSF0_TIME_LO            0x3ff21004
+#define WDEVTSF0_TIME_HI            0x3ff21008
+#define WDEVSLEEP0_CONF             0x3ff21014
+#define WDEVTSFSW0_LO               0x3ff21018
+#define WDEVTSFSW0_HI               0x3ff2101C
+#define WDEVTSF0_TIMER_LO           0x3ff2109c
+#define WDEVTSF0_TIMER_HI           0x3ff210a0
+#define WDEVTSF0TIMER_ENA           0x3ff21098
+#define WDEV_TSF0TIMER_ENA          BIT(31)
+#define WDEV_TSFUP0_ENA             BIT(31)
 
 //Watch dog reg {{
 #define PERIPHS_WDT_BASEADDR        0x60000900
@@ -188,10 +200,15 @@
 #define PAD_XPD_DCDC_CONF               (REG_RTC_BASE + 0x0A0)
 //}}
 
+#define WDEV_RAND                        (WDEV_COUNT_REG + 0x244)
+
 //CACHE{{
 #define CACHE_FLASH_CTRL_REG            (0x3ff00000 + 0x0c)
 #define CACHE_READ_EN_BIT               BIT8
 //}}
+
+#define ESP_CACHE1_ADDR_MAX             (0x100000)
+#define ESP_CACHE2_ADDR_MAX             (0x200000)
 
 #define DRAM_BASE                       (0x3FFE8000)
 #define DRAM_SIZE                       (96 * 1024)
